@@ -6,6 +6,8 @@ I recommend to disable this mod during multiplayer races and time trial (even th
 
 Please also treat it more like a tech demo. I might deprecate this mod at any time.
 
+The mod was kept intentionally simple. Replays and ghost cars will get random cars assigned and don't show the same model as the AI / player in a race.
+
 An unofficial mod for [Throttle Trace](https://store.steampowered.com/app/4535730/) that replaces the game's car model with other car models and lets you race a class of cars in quick races.
 
 - **`mods/car_switcher/mod.gd`** swaps the model of every car in quick races and career mode.
