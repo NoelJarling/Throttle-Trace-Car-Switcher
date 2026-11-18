@@ -4,6 +4,8 @@
 
 I recommend to disable this mod during multiplayer races and time trial (even though it should not apply to them) and carefully test it after every game update.
 
+Please also treat it more like a tech demo. I might deprecate this mod at any time.
+
 An unofficial mod for [Throttle Trace](https://store.steampowered.com/app/4535730/) that replaces the game's car model with other car models and lets you race a class of cars in quick races.
 
 - **`mods/car_switcher/mod.gd`** swaps the model of every car in quick races and career mode.
