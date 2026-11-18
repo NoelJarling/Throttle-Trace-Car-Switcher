@@ -26,6 +26,8 @@ Built for Throttle Trace v0.42.0 (Godot 4.6). Game updates may break it.
 
 The game has no built-in mod support. Install the [Throttle Trace Mod Loader](https://github.com/NoelJarling/Throttle-Trace-Mod-Loader) first, including the `--enable-mods` launch option.
 
+Version 1.2.0 of the mod loader is required.
+
 ### 2. Copy `mods/` into the game's user data folder
 
 | OS      | User data folder                                    |
