@@ -1,6 +1,6 @@
 # Throttle Trace Car Switcher
 
-!! Use this mod with caution as it changes gameplay aspects of the game !!
+⚠️ Use this mod with caution as it changes gameplay aspects of the game ⚠️
 
 I recommend to disable this mod during multiplayer races and time trial (even though it should not apply to them) and carefully test it after every game update.
 
