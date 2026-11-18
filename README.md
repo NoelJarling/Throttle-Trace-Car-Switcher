@@ -1,12 +1,17 @@
 # Throttle Trace Car Switcher
 
+!! Use this mod with caution as it changes gameplay aspects of the game !!
+I recommend to disable this mod during multiplayer races and time trial (even though it should not apply to them) and carefully test it after every game update.
+
 An unofficial mod for [Throttle Trace](https://store.steampowered.com/app/4535730/) that replaces the game's car model with other car models and lets you race a class of cars in quick races.
 
-- **`mods/car_switcher/mod.gd`** swaps the model of every car (player, AI, ghosts, replays, menu previews) for a model from `mods/car_switcher/cars/`. It adds two dropdowns to the quick race popup, **Class** and **Your Car**. The AI field is dealt from the chosen class, and every car in the class is used once before any car repeats. Wheels spin with the car's speed.
+- **`mods/car_switcher/mod.gd`** swaps the model of every car in quick races and career mode.
 - **`mods/car_switcher/car_spin.gd`** and **`car_gravity.gd`** apply a class's performance values (see [Settings](#settings)): wheelspin and corner-exit grip scaled to the engine power, real slope gravity, DRS and ERS turned off.
 - **`mods/car_switcher/settings.cfg`** holds the performance values per class and the car for each career team.
 
 Only the look of the cars changes. Physics, collisions and sound stay the game's own, apart from the class performance values.
+
+The class performance uses the gameplay car performance settings for a race and does not implement custom physics.
 
 Built for Throttle Trace v0.42.0 (Godot 4.6). Game updates may break it.
 
@@ -17,8 +22,6 @@ Built for Throttle Trace v0.42.0 (Godot 4.6). Game updates may break it.
 ### 1. Install the mod loader
 
 The game has no built-in mod support. Install the [Throttle Trace Mod Loader](https://github.com/NoelJarling/Throttle-Trace-Mod-Loader) first, including the `--enable-mods` launch option.
-
-The class performance values need a loader with `extend_script`. Without it the cars are still swapped, and the log shows an error that wheelspin ignores engine power.
 
 ### 2. Copy `mods/` into the game's user data folder
 
@@ -77,12 +80,6 @@ A glTF binary in the game's car model space: metres, +Y up, +Z towards the nose,
 The game's suspension, steering wheel, number and driver are hidden.
 
 ### `car.cfg` (optional)
-
-```ini
-[car]
-name="Red Bull Racing"
-classes=["F1 2026"]
-```
 
 - `name`: shown in the **Your Car** dropdown. Default: the folder name.
 - `classes`: the classes the car belongs to. Every class of any car appears in the **Class** dropdown.
