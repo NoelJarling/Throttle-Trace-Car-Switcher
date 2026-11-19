@@ -60,22 +60,19 @@ instance uniform float car_cut = 0.0;""",
 
 var _dir: String
 
-# For the current race only: set when the quick race popup's Start race is pressed, cleared when the track closes
-var _player_type := ""  # "" = random from the field
-var _field_class := ""  # "" = the game's default car for everyone
-
-# The quick race popup's dropdowns (applied on Start race)
+# The quick race popup's dropdowns. Start race puts the choice on that race's TrackParams as metas
+# car_switcher_class ("" = the game's default car for everyone) and car_switcher_player ("" = random from the class).
 var _chosen_class := ""
 var _chosen_player := ""
 
 # settings.cfg and the cars on disk, read once at game start
 var _teams := {}  # [teams]: lower-case career team name -> car
 var _performance := {}  # [performance]: lower-case class name -> {gameplay setting: value}
+var _series := {}  # [series]: lower-case career series name -> class (its [performance] applies in that series)
 var _classes := {}  # lower-case class name -> {"name": as first written, "cars": its car types sorted by name}
 var _names := {}  # car type -> car.cfg name, else the folder
 
-# The current field and grid
-var _field := []  # car types the AI pick from: the chosen class's cars (empty = the game's default car)
+# The current grid (reset when a session loads)
 var _bag := []  # what's left of the shuffled field for this grid: every car once before any repeats
 var _bag_first := true  # the bag's first filling for this grid (leaves out a set player car)
 
@@ -101,6 +98,11 @@ func _ready() -> void:
 		loader.extend_script(_dir.path_join("car_spin.gd"), ["res://cars/car.tscn"])
 	else:
 		push_error("[CarSwitcher] the mod loader has no extend_script: wheelspin ignores engine power")
+
+	# Class performance per session. Main.router is set by the main scene, ready after the autoloads (and this mod)
+	while Main.router == null:
+		await get_tree().process_frame
+	Main.router.route_changed.connect(_on_route_changed)
 
 
 # Wheel spin every physics step (visual only)
@@ -130,10 +132,6 @@ func _on_node_added(node: Node) -> void:
 		_add_race_rows(node)
 		return
 
-	# The popup's choice is valid for this race only (a quick race restart keeps the same Track node)
-	if node is Track and not node.tree_exiting.is_connected(_on_track_exiting):
-		node.tree_exiting.connect(_on_track_exiting)
-
 	# Otherwise we only care about CarModel nodes added to the tree
 	var script: Script = node.get_script()
 	if script == null or script.get_global_name() != "CarModel":
@@ -144,53 +142,70 @@ func _on_node_added(node: Node) -> void:
 	if not parts.is_empty():
 		_apply(node, parts)
 
-func _on_track_exiting() -> void:
-	_set_class("")
-
-
 ## Player, AI, replay, ghost or menu preview, told apart by the model's holder.
+## The class / player car come from the TrackParams of the track the model is in (none: menu previews).
 func _car_type_for(model: Node3D) -> String:
 	var holder := model.get_parent()  # race Car: CarModelPositioner; ghost and replay cars: themselves
 	var car := holder.get_parent() if holder != null else null
+	var params = _track_params(model)
 	if car != null and "player_controller" in car and "driver" in car:
-		return _race_car_type(car) # Cars in a race
-	return _player_or_random()  # replays, ghosts and menu previews
+		return _race_car_type(car, params) # Cars in a race
+	return _random_type(params)  # replays, ghosts and menu previews
 
 
-## A race Car: its team's car, else the player setting / a random car.
-## The game sets the car's index, team, driver and player_controller before add_child.
-func _race_car_type(car: Node) -> String:
-	if car.get("index") == 0:  # a new grid: track.init_with_params creates all its cars in one loop
-		_bag = []
-		_bag_first = true
-		_set_performance(car.get("track"))
-	var team = car.get("team")  # only career teams have fixed names
-	var team_car: String = _teams.get(str(team.team_name).to_lower(), "") if team != null and "team_name" in team else ""
-	if team_car != "":
-		return team_car
-	return _player_or_random() if car.get("player_controller") != null else _random_type()
+## The params of the Track above the node, null outside a track.
+func _track_params(node: Node):
+	while node != null and not node is Track:
+		node = node.get_parent()
+	return node.get("params") if node != null else null
 
 
-## [performance] values of the field's class for this race. The cars read the
-## gameplay settings in their _ready(), after this. The race gets a copy, so the gameplay tab's own
-## values stay as they are; the original is kept on the params for a restart of the same track.
-# original = The games gameplay settings object
-# settings = The mods gameplay settings object
-func _set_performance(track) -> void:
-	var params = track.get("params") if track != null else null
-	if params == null or params.get("is_multiplayer") or track.get("is_time_trial") or not params.get("gameplay_settings") is Object:
+## Every session (quick race, career event / practice, duel, editor test race, restarts) loads through the
+## "track_loading" route with its TrackParams; route_changed fires before the track and its cars are built.
+func _on_route_changed(route_name: String) -> void:
+	if route_name != "track_loading":
 		return
-	if not params.has_meta("car_switcher_gameplay"):
-		params.set_meta("car_switcher_gameplay", params.gameplay_settings)
-	var original: Object = params.get_meta("car_switcher_gameplay")
-	var values = _performance.get(_field_class.to_lower()) # _performance: settings.cfg, _field_class: quick race popup
-	params.remove_meta("car_switcher_gravity")
-	params.remove_meta("car_switcher_no_drs")
-	params.remove_meta("car_switcher_no_ers")
-	params.remove_meta("car_switcher_performance")
+	_bag = []  # a new grid
+	_bag_first = true
+	var params = _loading_params()
+	if params != null:
+		_set_performance(params)
+
+
+## Quick race: the popup's choice onto the race's params (a restart reuses them), then its performance:
+## _on_route_changed ran first, before the class was on the params (and applied nothing).
+func _tag_race(route_name: String, car_class: String, player: String) -> void:
+	var params = _loading_params() if route_name == "track_loading" else null
+	if params == null:
+		return
+	params.set_meta("car_switcher_class", car_class)
+	params.set_meta("car_switcher_player", player)
+	_set_performance(params)
+
+
+## The TrackParams of the "track_loading" route being loaded, else null.
+func _loading_params():
+	var route_params = Main.router.get("current_params")
+	var params = route_params.get("params") if route_params is Dictionary else null
+	return params if params is Object else null
+
+
+## Only career series and the quick race popup give a class: multiplayer, time attack, editor test races get none.
+func _set_performance(params) -> void:
+	if params.has_meta("car_switcher_performance"):
+		return # Performance values already set (e.g. on restart)
+	# The session's class: a career series' class from [series], else the quick race popup's
+	var car_class: String = params.get_meta("car_switcher_class", "")
+	for car in params.get("cars"):
+		var team = car.get("team") if car is Dictionary else null
+		var series = team.get("series") if team is Object and team.get("series_id") != null else null
+		if series is Object:
+			car_class = _series.get(str(series.get("series_name")).to_lower(), "")
+			break
+	var values = _performance.get(car_class.to_lower())  # _performance: settings.cfg
 	if not values is Dictionary:
-		params.gameplay_settings = original
-		return
+		return  # no class performance: the game's own settings, untouched
+	var original: Object = params.gameplay_settings
 	var settings: Object = original.get_script().new()
 	settings.load_data(original.get_save_data())
 	for key in values:
@@ -204,23 +219,39 @@ func _set_performance(track) -> void:
 		else:
 			push_error("[CarSwitcher] settings.cfg [performance]: no gameplay setting " + str(key))
 	params.gameplay_settings = settings
-	params.set_meta("car_switcher_performance", true)  # read by car_spin.gd: wheelspin / grip cost follow the engine power
+	# Marks the params as done (restarts skip them) and is read by car_spin.gd: wheelspin / grip cost follow the engine power
+	params.set_meta("car_switcher_performance", true)
 
 
-func _player_or_random() -> String:
-	return _player_type if _player_type != "" else _random_type()
+## A race Car: its team's car, else the player or random
+## The game sets the car's index, team, driver and player_controller before add_child.
+func _race_car_type(car: Node, params) -> String:
+	var team = car.get("team")  # only career teams have fixed names
+	var team_car: String = _teams.get(str(team.team_name).to_lower(), "") if team != null and "team_name" in team else ""
+	if team_car != "":
+		return team_car
+	return _player_or_random(params) if car.get("player_controller") != null else _random_type(params)
 
 
-## Deals cars from a shuffled bag of the field, so a grid repeats a car only once all have been used.
-## A set player car is left out of the first round (unless it is the only car).
-func _random_type() -> String:
-	if _field.is_empty():
+func _player_or_random(params) -> String:
+	var player: String = params.get_meta("car_switcher_player", "") if params != null else ""
+	return player if player != "" else _random_type(params)
+
+
+## Deals cars from a shuffled bag of the race's class (its field), so a grid repeats a car only once all have
+## been used. A set player car is left out of the first round (unless it is the only car).
+func _random_type(params) -> String:
+	if params == null:
+		return DEFAULT_CAR
+	var field: Array = _classes.get(params.get_meta("car_switcher_class", "").to_lower(), {"cars": []}).cars
+	if field.is_empty():
 		return DEFAULT_CAR
 	if _bag.is_empty():
-		_bag = _field.duplicate()
+		var player: String = params.get_meta("car_switcher_player", "")
+		_bag = field.duplicate()
 		_bag.shuffle()
-		if _bag_first and _player_type != "" and _bag.size() > 1:
-			_bag.erase(_player_type)
+		if _bag_first and player != "" and _bag.size() > 1:
+			_bag.erase(player)
 		_bag_first = false
 	return _bag.pop_back()
 
@@ -234,6 +265,8 @@ func _read_settings() -> void:
 		_teams[team_name.to_lower()] = str(settings.get_value("teams", team_name)).strip_edges()
 	for car_class in _section_keys(settings, "performance"):
 		_performance[car_class.to_lower()] = settings.get_value("performance", car_class)
+	for series_name in _section_keys(settings, "series"):
+		_series[series_name.to_lower()] = str(settings.get_value("series", series_name)).strip_edges()
 
 
 func _section_keys(settings: ConfigFile, section: String) -> PackedStringArray:
@@ -258,20 +291,12 @@ func _scan_cars() -> void:
 		car_class.cars.sort_custom(func(a, b): return _names[a].naturalnocasecmp_to(_names[b]) < 0)
 
 
-## The field = the class's cars ("" or an unknown class: none). The player car is kept only if it is in it.
-func _set_class(car_class: String) -> void:
-	var known: Dictionary = _classes.get(car_class.to_lower(), {"name": "", "cars": []})
-	_field_class = known.name
-	_field = known.cars
-	if not _player_type in _field:
-		_player_type = ""
-
-
 # --- Quick race popup: Class and Your Car dropdowns under "Laps" ---
 
 ## Caught in node_added: the popup's nodes exist but aren't ready yet, so the race settings group's
 ## _ready() wires the new rows' descriptions like its own. The choice applies when Start race is pressed
-## (the form's confirmed signal; the game builds the track after it, asynchronously).
+## (the form's confirmed signal): the game then builds the race's TrackParams and loads the "track_loading"
+## route (next route change; clear_routes doesn't emit one), where the choice goes onto those params.
 func _add_race_rows(quick_race: Node) -> void:
 	var laps := quick_race.find_child("LapCountSpin", true, false)
 	var form = quick_race.get("form")
@@ -279,8 +304,7 @@ func _add_race_rows(quick_race: Node) -> void:
 		push_error("[CarSwitcher] quick race popup changed (no LapCountSpin / form.confirmed): no car dropdowns")
 		return
 	form.confirmed.connect(func(_config):
-		_player_type = _chosen_player
-		_set_class(_chosen_class))
+		Main.router.route_changed.connect(_tag_race.bind(_chosen_class, _chosen_player), CONNECT_ONE_SHOT))
 	var class_option := _add_race_row(laps.get_parent(), "Class",
 			"Sets the cars used for this race. Some classes have different car performance.")
 	var car_option := _add_race_row(class_option.get_parent(), "Your Car",
@@ -353,6 +377,9 @@ func _load_car(type: String) -> Dictionary:
 	if parts.is_empty():
 		return {}
 	_add_mipmaps(parts)
+	var glass = parts.Glass.mesh.surface_get_material(0) if parts.has("Glass") and parts.Glass.mesh != null else null
+	if glass is BaseMaterial3D:
+		glass.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA  # the glTF import's depth pre-pass hid things behind
 	_cars[type] = parts
 	return parts
 
@@ -497,9 +524,6 @@ func _add_glass(model: Node3D, parts: Dictionary) -> void:
 	glass.mesh = parts.Glass.mesh
 	glass.position = parts.Glass.position - parts.Chassis.position
 	glass.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	var material = glass.mesh.surface_get_material(0)
-	if material is BaseMaterial3D:
-		material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA  # the glTF import's depth pre-pass hid things behind
 	chassis.add_child(glass)
 
 
