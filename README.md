@@ -12,7 +12,7 @@ An unofficial mod for [Throttle Trace](https://store.steampowered.com/app/453573
 
 - **`mods/car_switcher/mod.gd`** swaps the model of every car in quick races and career mode.
 - **`mods/car_switcher/car_spin.gd`** and **`car_gravity.gd`** apply a class's performance values (see [Settings](#settings)): wheelspin and corner-exit grip scaled to the engine power, real slope gravity, DRS and ERS turned off.
-- **`mods/car_switcher/settings.cfg`** holds the performance values per class and the car for each career team.
+- **`mods/car_switcher/settings.cfg`** holds the performance values per class, the class for each career series and the car for each career team.
 
 Only the look of the cars changes. Physics, collisions and sound stay the game's own, apart from the class performance values.
 
@@ -99,13 +99,16 @@ The game's suspension, steering wheel, number and driver are hidden.
 [performance]
 "GT3"={"engine_power": 0.363, "drag_coefficient": 0.0055, "braking_power": 0.42, "base_cornering_speed": 0.514, "gravity": 9.81, "drs": false, "ers": false}
 
+[series]
+"Vroomula 1"="GT3"
+
 [teams]
 "Red Bull Racing"="f1_26_rb"
 ```
 
 ### `[performance]`
 
-Values for races whose field is set to that class (class names are not case sensitive). Not used in time trials or multiplayer.
+Values for races whose field is set to that class in the quick race popup, or career sessions of a series mapped to that class in [`[series]`](#series) (class names are not case sensitive). Not used in time trials, editor test races or multiplayer.
 
 | Key | Value |
 |---|---|
@@ -116,7 +119,13 @@ Values for races whose field is set to that class (class names are not case sens
 
 With performance values set, the wheelspin limit and the grip lost on throttle out of corners follow `engine_power`. Without them all cars behave like the game's.
 
-The values in `settings.cfg` are fitted to real lap times at Laguna Seca for GT3, Hypercar / LMDh / LMH, MX5 Cup and the Corvette C7 Stingray.
+The values in `settings.cfg` are fitted to real lap times at Laguna Seca for GT3, Hypercar / LMDh / LMH and MX5 Cup.
+
+### `[series]`
+
+`"<career series name>"="<class>"`: career sessions of that series use the class's `[performance]` values. The series name is the series "name" in the career database (default database: `Vroomula 1`, `Vroomula 2`) and is not case sensitive. Series not listed race with the game's own performance.
+
+This sets only the performance. The cars of career teams come from `[teams]`.
 
 ### `[teams]`
 
