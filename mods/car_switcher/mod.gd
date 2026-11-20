@@ -10,10 +10,6 @@ const QUICK_RACE_SCENE := "res://ui/ui_quick_race/ui_quick_race"  # without exte
 # The game's car shaders paint a livery mask in the team colours; ours draw the car's own texture (livery) instead.
 # Each key is a line of the game's shader, replaced by its value. All must be found, else the car isn't swapped.
 const SHADER_PATCHES := {
-	# Both sides are drawn, in case a model has inside-out panels.
-	"shader_type spatial;": """shader_type spatial;
-render_mode cull_disabled;""",
-
 	"uniform sampler2D base_texture: source_color;": """uniform sampler2D base_texture: source_color;
 uniform sampler2D car_texture: source_color, filter_linear_mipmap_anisotropic, repeat_enable;
 uniform sampler2D car_surface: hint_default_black, filter_linear_mipmap_anisotropic, repeat_enable;
@@ -380,6 +376,7 @@ func _load_car(type: String) -> Dictionary:
 	var glass = parts.Glass.mesh.surface_get_material(0) if parts.has("Glass") and parts.Glass.mesh != null else null
 	if glass is BaseMaterial3D:
 		glass.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA  # the glTF import's depth pre-pass hid things behind
+		glass.cull_mode = BaseMaterial3D.CULL_BACK  # front faces only, like the body (the glb says double-sided)
 	_cars[type] = parts
 	return parts
 
@@ -467,6 +464,10 @@ func _patch_materials(model: Node3D, texture: Texture2D, surface: Texture2D) -> 
 ## The highlight outline with OUTLINE_PATCHES (nothing changed if a line is missing).
 func _patch_outline(model: Node3D, texture: Texture2D) -> void:
 	var outline = model.get("highlight_mat")
+	if outline is ShaderMaterial:
+		# drawn before the car glass (both transparent passes): else the outline of the cage behind showed on top of
+		# opaque window banners (Aston GT3 replay, 2026-11-19)
+		outline.render_priority = -1
 	var shader := _patched(outline.shader, OUTLINE_PATCHES) if outline is ShaderMaterial else null
 	if shader != null:
 		outline.shader = shader
